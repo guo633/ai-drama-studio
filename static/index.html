@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Drama Studio · 短剧创作工作台</title>
+<style>
+  :root {
+    --primary: #0d9488; --primary-dark: #0f766e; --primary-light: #ccfbf1;
+    --bg: #f6f8f8; --card: #ffffff; --border: #e2e8e8;
+    --text: #1a2b2b; --muted: #64748b; --danger: #dc2626; --warn: #d97706;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  button { cursor: pointer; font-family: inherit; }
+  input, textarea, select { font-family: inherit; }
+
+  /* ---------- 顶栏 ---------- */
+  header { background: var(--card); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .logo { font-size: 18px; font-weight: 700; color: var(--primary); }
+  .logo span { color: var(--text); font-weight: 500; font-size: 14px; margin-left: 8px; }
+  .user-box { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--muted); }
+  .user-box button { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--muted); }
+  .user-box button:hover { color: var(--danger); border-color: var(--danger); }
+
+  nav { display: flex; gap: 4px; }
+  nav button { background: none; border: none; padding: 8px 16px; border-radius: 8px; font-size: 14px; color: var(--muted); }
+  nav button.active { background: var(--primary-light); color: var(--primary-dark); font-weight: 600; }
+
+  main { max-width: 860px; margin: 24px auto; padding: 0 16px; }
+  .hidden { display: none !important; }
+
+  /* ---------- 卡片与表单 ---------- */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
+  h2 { font-size: 16px; margin-bottom: 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+  input[type=text], input[type=password], input[type=number], textarea, select {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; background: #fbfdfd;
+  }
+  textarea { resize: vertical; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  .btn { background: var(--primary); color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; }
+  .btn:hover { background: var(--primary-dark); }
+  .btn.ghost { background: var(--card); color: var(--primary-dark); border: 1px solid var(--primary); }
+  .btn.small { padding: 6px 12px; font-size: 13px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .error { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 18px; }
+
+  /* ---------- 作品列表 ---------- */
+  .drama-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: #fbfdfd; cursor: pointer; }
+  .drama-item:hover { border-color: var(--primary); }
+  .drama-item .title { font-weight: 600; }
+  .drama-item .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .badge { font-size: 12px; padding: 3px 10px; border-radius: 999px; }
+  .badge.draft { background: #e2e8f0; color: #475569; }
+  .badge.generating { background: #fef3c7; color: var(--warn); }
+  .badge.done { background: var(--primary-light); color: var(--primary-dark); }
+  .badge.failed { background: #fee2e2; color: var(--danger); }
+
+  /* ---------- 进度 ---------- */
+  .progress-wrap { background: #eef2f2; border-radius: 999px; height: 10px; overflow: hidden; margin: 10px 0; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary), #2dd4bf); width: 0; transition: width .5s; }
+  .step-block { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .step-head { padding: 12px 16px; background: #fbfdfd; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .step-body { padding: 14px 16px; font-size: 14px; line-height: 1.8; white-space: pre-wrap; border-top: 1px solid var(--border); display: none; }
+  .step-block.open .step-body { display: block; }
+  .step-status { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+  /* ---------- 模板 ---------- */
+  .tpl-item { margin-bottom: 14px; }
+  .tpl-item .tpl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .tpl-item textarea { min-height: 120px; font-size: 13px; line-height: 1.6; }
+  .saved-tip { color: var(--primary-dark); font-size: 12px; margin-left: 10px; }
+
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🎬 AI Drama Studio<span>短剧创作工作台</span></div>
+  <div class="user-box hidden" id="userBox">
+    <nav>
+      <button data-tab="works" class="active">我的作品</button>
+      <button data-tab="create">新建作品</button>
+      <button data-tab="prompts">Prompt 模板</button>
+    </nav>
+    <span id="username"></span>
+    <button onclick="logout()">退出</button>
+  </div>
+</header>
+
+<main>
+  <!-- 登录 / 注册 -->
+  <div id="authView" style="max-width:400px;margin:60px auto 0;">
+    <div class="card">
+      <h2 id="authTitle">登录</h2>
+      <label>用户名</label>
+      <input type="text" id="authUsername" placeholder="2-50 个字符">
+      <label>密码</label>
+      <input type="password" id="authPassword" placeholder="至少 6 位">
+      <div class="error" id="authError"></div>
+      <button class="btn" style="width:100%" onclick="submitAuth()" id="authBtn">登录</button>
+      <p class="hint" id="authSwitchHint">还没有账号？<a href="#" onclick="toggleAuth(event)">立即注册</a></p>
+    </div>
+  </div>
+
+  <!-- 我的作品 -->
+  <div id="worksView" class="hidden">
+    <div class="card">
+      <h2>我的作品</h2>
+      <div id="dramaList"></div>
+    </div>
+  </div>
+
+  <!-- 新建作品 -->
+  <div id="createView" class="hidden">
+    <div class="card">
+      <h2>新建短剧</h2>
+      <label>剧名</label>
+      <input type="text" id="fTitle" placeholder="例如：龙王归来">
+      <label>一句话创意</label>
+      <textarea id="fIdea" rows="3" placeholder="例如：落魄外卖员其实是隐世豪门继承人，为守护女儿被迫重出江湖"></textarea>
+      <div class="row">
+        <div>
+          <label>题材</label>
+          <select id="fGenre">
+            <option>都市</option><option>逆袭</option><option>甜宠</option>
+            <option>悬疑</option><option>古装</option><option>科幻</option><option>其他</option>
+          </select>
+        </div>
+        <div>
+          <label>风格</label>
+          <select id="fStyle">
+            <option>爽剧</option><option>反转</option><option>热血</option>
+            <option>治愈</option><option>搞笑</option>
+          </select>
+        </div>
+        <div>
+          <label>集数</label>
+          <input type="number" id="fEpisodes" value="10" min="1" max="100">
+        </div>
+      </div>
+      <div class="error" id="createError"></div>
+      <button class="btn" onclick="createDrama()">开始生成</button>
+      <p class="hint">生成按「世界观 → 人物 → 大纲 → 剧本 → 分镜」五步流水线推进，约需 1-3 分钟（演示模式为秒级）。</p>
+    </div>
+  </div>
+
+  <!-- 作品详情 -->
+  <div id="detailView" class="hidden">
+    <div class="card">
+      <h2 id="detailTitle"></h2>
+      <p class="hint" id="detailMeta"></p>
+      <div id="progressArea">
+        <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+        <p class="hint" id="progressText"></p>
+      </div>
+      <div id="resultArea"></div>
+      <div style="margin-top:12px;display:flex;gap:10px;">
+        <button class="btn ghost small" onclick="backToList()">← 返回列表</button>
+        <button class="btn small hidden" id="exportBtn" onclick="exportDrama()">导出完整方案 (.txt)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prompt 模板 -->
+  <div id="promptsView" class="hidden">
+    <div class="card">
+      <h2>Prompt 模板（项目内置 Skill）</h2>
+      <p class="hint" style="margin-bottom:14px;">
+        模板支持 {title} {idea} {genre} {style} {episode_count} {world_view} {characters} {outline} {script} 等变量。
+        修改保存后立即生效，下一次生成即使用新模板 —— 这就是本项目「Prompt 即 Skill」的落地方式。
+      </p>
+      <div id="promptList"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = "";
+let token = localStorage.getItem("token") || "";
+let authMode = "login";
+let currentDrama = null;
+let pollTimer = null;
+
+// ---------- 基础 ----------
+async function api(path, opts = {}) {
+  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (token) headers["Authorization"] = "Bearer " + token;
+  const resp = await fetch(API + path, { ...opts, headers });
+  if (resp.status === 401) { logout(); throw new Error("登录已过期"); }
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.detail || "请求失败");
+  return data;
+}
+
+function show(id) {
+  ["authView","worksView","createView","detailView","promptsView"].forEach(v =>
+    document.getElementById(v).classList.toggle("hidden", v !== id));
+  document.querySelectorAll("nav button").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === {worksView:"works",createView:"create",detailView:"works",promptsView:"prompts"}[id]));
+}
+
+// ---------- 认证 ----------
+function toggleAuth(e) {
+  e.preventDefault();
+  authMode = authMode === "login" ? "register" : "login";
+  document.getElementById("authTitle").textContent = authMode === "login" ? "登录" : "注册";
+  document.getElementById("authBtn").textContent = authMode === "login" ? "登录" : "注册";
+  document.getElementById("authSwitchHint").innerHTML = authMode === "login"
+    ? '还没有账号？<a href="#" onclick="toggleAuth(event)">立即注册</a>'
+    : '已有账号？<a href="#" onclick="toggleAuth(event)">去登录</a>';
+}
+
+async function submitAuth() {
+  const username = document.getElementById("authUsername").value.trim();
+  const password = document.getElementById("authPassword").value;
+  document.getElementById("authError").textContent = "";
+  try {
+    const data = await api(`/api/auth/${authMode}`, { method: "POST", body: JSON.stringify({ username, password }) });
+    token = data.token;
+    localStorage.setItem("token", token);
+    enterApp(data.username);
+  } catch (err) { document.getElementById("authError").textContent = err.message; }
+}
+
+function logout() {
+  token = ""; localStorage.removeItem("token");
+  stopPoll();
+  document.getElementById("userBox").classList.add("hidden");
+  document.getElementById("authView").classList.remove("hidden");
+  show("authView");
+}
+
+function enterApp(username) {
+  document.getElementById("authView").classList.add("hidden");
+  document.getElementById("userBox").classList.remove("hidden");
+  document.getElementById("username").textContent = "👋 " + username;
+  show("worksView");
+  loadDramas();
+}
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  if (b.dataset.tab === "works") { show("worksView"); loadDramas(); }
+  if (b.dataset.tab === "create") show("createView");
+  if (b.dataset.tab === "prompts") { show("promptsView"); loadPrompts(); }
+});
+
+// ---------- 作品 ----------
+async function loadDramas() {
+  const dramas = await api("/api/dramas");
+  const box = document.getElementById("dramaList");
+  if (!dramas.length) { box.innerHTML = '<p class="empty">还没有作品，点上方「新建作品」开始你的第一部 AI 短剧 🎬</p>'; return; }
+  const statusText = { draft: "草稿", generating: "生成中", done: "已完成", failed: "失败" };
+  box.innerHTML = dramas.map(d => `
+    <div class="drama-item" onclick="openDetail(${d.id})">
+      <div><div class="title">《${esc(d.title)}》</div>
+      <div class="meta">${esc(d.genre)} · ${esc(d.style)} · ${d.episode_count} 集</div></div>
+      <span class="badge ${d.status}">${statusText[d.status] || d.status}</span>
+    </div>`).join("");
+}
+
+async function createDrama() {
+  const body = {
+    title: document.getElementById("fTitle").value.trim(),
+    idea: document.getElementById("fIdea").value.trim(),
+    genre: document.getElementById("fGenre").value,
+    style: document.getElementById("fStyle").value,
+    episode_count: parseInt(document.getElementById("fEpisodes").value) || 10,
+  };
+  document.getElementById("createError").textContent = "";
+  try {
+    const drama = await api("/api/dramas", { method: "POST", body: JSON.stringify(body) });
+    document.getElementById("fTitle").value = ""; document.getElementById("fIdea").value = "";
+    openDetail(drama.id, drama.latest_task_id);
+  } catch (err) { document.getElementById("createError").textContent = err.message; }
+}
+
+const STEP_NAMES = ["world_view","characters","outline","script","storyboard"];
+const STEP_LABELS = { world_view:"世界观设定", characters:"人物卡", outline:"分集大纲", script:"第 1 集剧本", storyboard:"分镜与 AI 提示词" };
+
+async function openDetail(dramaId, taskId) {
+  stopPoll();
+  const drama = await api("/api/dramas/" + dramaId);
+  currentDrama = drama;
+  document.getElementById("detailTitle").textContent = "《" + drama.title + "》";
+  document.getElementById("detailMeta").textContent = `创意：${drama.idea}`;
+  show("detailView");
+  if (drama.latest_task_id || taskId) pollTask(taskId || drama.latest_task_id);
+}
+
+async function pollTask(taskId) {
+  const render = (t) => {
+    document.getElementById("progressBar").style.width = t.progress + "%";
+    const statusMap = { queued:"排队中", running:`正在生成：${t.current_step}`, done:"✅ 生成完成", failed:"❌ 生成失败：" + t.error };
+    document.getElementById("progressText").textContent = statusMap[t.status] || t.status;
+    document.getElementById("resultArea").innerHTML = STEP_NAMES.map(key => {
+      const content = (t.result || {})[key];
+      const stepIdx = STEP_NAMES.indexOf(key);
+      const currentIdx = STEP_NAMES.indexOf(t.current_step);
+      const st = content ? "完成" : (t.status !== "done" && stepIdx === currentIdx ? "生成中…" : "等待");
+      const open = content && !document.querySelector('.step-block[data-step="' + key + '"]') ? " open" : "";
+      return `<div class="step-block${open}" data-step="${key}">
+        <div class="step-head" onclick="this.parentNode.classList.toggle('open')">
+          <span>${STEP_LABELS[key]}</span><span class="step-status">${st}</span></div>
+        <div class="step-body">${content ? esc(content) : "…"}</div></div>`;
+    }).join("");
+    document.getElementById("exportBtn").classList.toggle("hidden", t.status !== "done");
+    return t.status === "done" || t.status === "failed";
+  };
+
+  const finished = render(await api("/api/tasks/" + taskId));
+  if (!finished) {
+    pollTimer = setInterval(async () => {
+      try {
+        const t = await api("/api/tasks/" + taskId);
+        if (render(t)) stopPoll();
+      } catch (e) { stopPoll(); }
+    }, 2000);
+  }
+}
+function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+function backToList() { stopPoll(); show("worksView"); loadDramas(); }
+
+async function exportDrama() {
+  const resp = await fetch(`/api/dramas/${currentDrama.id}/export`, { headers: { Authorization: "Bearer " + token } });
+  const text = await resp.text();
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${currentDrama.title}_创作方案.txt`;
+  a.click();
+}
+
+// ---------- Prompt 模板 ----------
+async function loadPrompts() {
+  const tpls = await api("/api/prompts");
+  document.getElementById("promptList").innerHTML = tpls.map(t => `
+    <div class="tpl-item">
+      <div class="tpl-head"><strong>${esc(t.name)}</strong>
+        <span><span class="saved-tip" id="tip-${t.step}"></span>
+        <button class="btn small" onclick="savePrompt('${t.step}')">保存</button></span></div>
+      <textarea id="tpl-${t.step}">${esc(t.content)}</textarea>
+    </div>`).join("");
+}
+
+async function savePrompt(step) {
+  const content = document.getElementById("tpl-" + step).value;
+  try {
+    await api("/api/prompts/" + step, { method: "PUT", body: JSON.stringify({ content }) });
+    document.getElementById("tip-" + step).textContent = "已保存 ✓";
+    setTimeout(() => document.getElementById("tip-" + step).textContent = "", 2000);
+  } catch (err) { alert(err.message); }
+}
+
+function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
+
+// ---------- 启动 ----------
+(async function init() {
+  if (!token) { document.getElementById("authView").classList.remove("hidden"); return; }
+  try { const me = await api("/api/auth/me"); enterApp(me.username); }
+  catch (e) { /* token 失效，回到登录页 */ }
+})();
+</script>
+</body>
+</html>
