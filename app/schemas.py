@@ -71,3 +71,12 @@ class PromptOut(BaseModel):
 
 class PromptUpdateIn(BaseModel):
     content: str = Field(min_length=10)
+
+
+# ---------- 运行时设置 ----------
+class SettingsIn(BaseModel):
+    """运行时更新 LLM 凭据（仅存进程内存，不落库、不写日志）"""
+
+    api_key: str | None = None
+    base_url: str | None = None
+    model: str | None = None

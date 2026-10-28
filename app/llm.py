@@ -1,14 +1,15 @@
-"""LLM 客户端：OpenAI 兼容接口（DeepSeek / 通义 / Kimi 等）。
+"""LLM 客户端：OpenAI 兼容接口（DeepSeek / 通义 / Kimi / OpenAI 等均可）。
 
-未配置 LLM_API_KEY 时自动进入「演示模式」：
-流水线完整跑通、状态正常流转，返回确定性的演示文案，
-方便开发调试和面试 Demo，不产生任何 API 费用。
+凭据来自 app.settings 的运行时配置：
+- 已配置 API Key → 调用真实模型
+- 未配置       → 演示模式，返回确定性示例文案（流程完整跑通、不产生任何费用）
 """
 import logging
 
 import httpx
 
 from . import config
+from .settings import get_runtime_settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,26 +20,44 @@ SYSTEM_PROMPT = (
 
 
 async def chat(prompt: str, mock_context: dict | None = None) -> str:
-    """调用 LLM 生成文本。演示模式返回基于上下文的示例文案。"""
-    if not config.LLM_API_KEY:
+    """调用 LLM 生成文本。未配置 Key 时返回演示文案。"""
+    rt = get_runtime_settings()
+    if not rt.configured:
         return _mock_reply(mock_context or {})
 
     payload = {
-        "model": config.LLM_MODEL,
+        "model": rt.model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.8,
     }
-    headers = {"Authorization": f"Bearer {config.LLM_API_KEY}"}
-    url = config.LLM_BASE_URL.rstrip("/") + "/chat/completions"
+    headers = {"Authorization": f"Bearer {rt.api_key}"}
+    url = rt.base_url.rstrip("/") + "/chat/completions"
 
     async with httpx.AsyncClient(timeout=config.LLM_TIMEOUT) as client:
         resp = await client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            # 把上游错误码与消息带出来，前端能直接定位是 Key 错还是额度问题
+            raise RuntimeError(f"LLM 接口返回 {resp.status_code}：{resp.text[:200]}")
         data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        try:
+            return data["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError) as exc:
+            raise RuntimeError(f"LLM 返回格式异常：{str(data)[:200]}") from exc
+
+
+async def verify_connection() -> dict:
+    """连通性自检：用最小请求验证 Key / BaseURL / 模型名是否可用。"""
+    rt = get_runtime_settings()
+    if not rt.configured:
+        return {"ok": True, "mode": "demo", "message": "未配置 API Key，当前为演示模式"}
+    try:
+        reply = await chat("只回复两个字符：OK")
+        return {"ok": True, "mode": "live", "model": rt.model, "reply": reply[:50]}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "mode": "live", "model": rt.model, "message": str(exc)[:300]}
 
 
 # ---------- 演示模式 ----------

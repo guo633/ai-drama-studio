@@ -87,6 +87,7 @@
       <button data-tab="works" class="active">我的作品</button>
       <button data-tab="create">新建作品</button>
       <button data-tab="prompts">Prompt 模板</button>
+      <button data-tab="settings">模型设置</button>
     </nav>
     <span id="username"></span>
     <button onclick="logout()">退出</button>
@@ -147,6 +148,29 @@
       <div class="error" id="createError"></div>
       <button class="btn" onclick="createDrama()">开始生成</button>
       <p class="hint">生成按「世界观 → 人物 → 大纲 → 剧本 → 分镜」五步流水线推进，约需 1-3 分钟（演示模式为秒级）。</p>
+      <p class="hint" id="modeHint"></p>
+    </div>
+  </div>
+
+  <!-- 模型设置（管理员） -->
+  <div id="settingsView" class="hidden">
+    <div class="card">
+      <h2>模型设置（管理员）</h2>
+      <p class="hint" style="margin-bottom:14px;">
+        当前状态：<strong id="curMode"></strong>　模型：<strong id="curModel"></strong>　Key：<span id="curKey"></span>
+      </p>
+      <label>API Key</label>
+      <input type="password" id="setKey" placeholder="sk-... （留空则不修改）">
+      <label>Base URL</label>
+      <input type="text" id="setBase" placeholder="https://api.deepseek.com/v1">
+      <label>模型名</label>
+      <input type="text" id="setModel" placeholder="deepseek-chat">
+      <div class="error" id="setError"></div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn" onclick="saveSettings()">保存并启用</button>
+        <button class="btn ghost" onclick="verifySettings()">连通性自检</button>
+      </div>
+      <p class="hint">Key 仅保存在服务器进程内存，不写入数据库、不写日志；服务重启后回到环境变量中的配置。</p>
     </div>
   </div>
 
@@ -199,10 +223,11 @@ async function api(path, opts = {}) {
 }
 
 function show(id) {
-  ["authView","worksView","createView","detailView","promptsView"].forEach(v =>
+  ["authView","worksView","createView","detailView","promptsView","settingsView"].forEach(v =>
     document.getElementById(v).classList.toggle("hidden", v !== id));
+  const map = {worksView:"works",createView:"create",detailView:"works",promptsView:"prompts",settingsView:"settings"};
   document.querySelectorAll("nav button").forEach(b =>
-    b.classList.toggle("active", b.dataset.tab === {worksView:"works",createView:"create",detailView:"works",promptsView:"prompts"}[id]));
+    b.classList.toggle("active", b.dataset.tab === map[id]));
 }
 
 // ---------- 认证 ----------
@@ -242,13 +267,76 @@ function enterApp(username) {
   document.getElementById("username").textContent = "👋 " + username;
   show("worksView");
   loadDramas();
+  loadMode();
 }
 
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   if (b.dataset.tab === "works") { show("worksView"); loadDramas(); }
   if (b.dataset.tab === "create") show("createView");
   if (b.dataset.tab === "prompts") { show("promptsView"); loadPrompts(); }
+  if (b.dataset.tab === "settings") { show("settingsView"); loadSettings(); }
 });
+
+// ---------- 模型状态 / 设置 ----------
+async function loadMode() {
+  try {
+    const rt = await api("/api/settings");
+    const live = rt.configured;
+    document.getElementById("modeHint").textContent = live
+      ? `当前接入真实模型：${rt.model}`
+      : "当前为演示模式（未配置 API Key）：流程完整、结果为示例文案";
+  } catch (e) { /* 忽略 */ }
+}
+
+async function loadSettings() {
+  try {
+    const rt = await api("/api/settings");
+    document.getElementById("curMode").textContent = rt.mode === "live" ? "真实模型" : "演示模式";
+    document.getElementById("curModel").textContent = rt.model;
+    document.getElementById("curKey").textContent = rt.api_key_masked || "未配置";
+    document.getElementById("setBase").value = rt.base_url;
+    document.getElementById("setModel").value = rt.model;
+  } catch (e) {
+    document.getElementById("setError").textContent = e.message;
+  }
+}
+
+async function saveSettings() {
+  const body = {
+    api_key: document.getElementById("setKey").value.trim() || null,
+    base_url: document.getElementById("setBase").value.trim() || null,
+    model: document.getElementById("setModel").value.trim() || null,
+  };
+  document.getElementById("setError").textContent = "";
+  try {
+    await api("/api/settings/llm", { method: "POST", body: JSON.stringify(body) });
+    document.getElementById("setKey").value = "";
+    await loadSettings();
+    await loadMode();
+    document.getElementById("setError").style.color = "var(--primary-dark)";
+    document.getElementById("setError").textContent = "已保存并生效 ✓";
+    setTimeout(() => { document.getElementById("setError").textContent = ""; }, 3000);
+  } catch (err) {
+    document.getElementById("setError").style.color = "var(--danger)";
+    document.getElementById("setError").textContent = err.message;
+  }
+}
+
+async function verifySettings() {
+  const box = document.getElementById("setError");
+  box.style.color = "var(--muted)";
+  box.textContent = "自检中…";
+  try {
+    const r = await api("/api/settings/verify", { method: "POST" });
+    box.style.color = r.ok ? "var(--primary-dark)" : "var(--danger)";
+    box.textContent = r.ok
+      ? `✅ 连接正常（模式：${r.mode}${r.model ? "，模型：" + r.model : ""}）`
+      : `❌ 连接失败：${r.message}`;
+  } catch (err) {
+    box.style.color = "var(--danger)";
+    box.textContent = err.message;
+  }
+}
 
 // ---------- 作品 ----------
 async function loadDramas() {

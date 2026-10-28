@@ -1,4 +1,7 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+import asyncio
+import threading
+
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
@@ -8,6 +11,7 @@ from ..models import Drama, GenerationTask, User
 from ..pipeline import run_pipeline
 from ..prompts import PIPELINE_STEPS
 from ..schemas import DramaCreateIn, DramaDetailOut, DramaOut
+from ..settings import get_runtime_settings
 
 router = APIRouter(prefix="/api/dramas", tags=["dramas"])
 
@@ -23,14 +27,24 @@ def _get_owned_drama(drama_id: int, user: User, db: Session) -> Drama:
     return drama
 
 
+@router.get("/runtime")
+def runtime_info():
+    """公开的运行时信息，供前端展示当前使用的是真实模型还是演示模式。"""
+    rt = get_runtime_settings()
+    return {"model": rt.model, "mode": rt.mode}
+
+
 @router.post("", response_model=DramaDetailOut)
 def create_drama(
     body: DramaCreateIn,
-    background: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """创建作品并立即在后台启动生成流水线。"""
+    """创建作品并立即启动生成流水线。
+
+    注意：这里用 threading.Thread 而不是 BackgroundTasks —— 后者在响应发出后才执行，
+    真实 LLM 五步生成可能耗时 1-3 分钟，会拖住连接并可能被云平台网关超时切断。
+    """
     drama = Drama(
         owner_id=user.id,
         title=body.title,
@@ -49,7 +63,11 @@ def create_drama(
     db.commit()
     db.refresh(task)
 
-    background.add_task(run_pipeline, drama.id, task.id)
+    # daemon 线程：主进程退出即回收，不阻塞 worker
+    threading.Thread(
+        target=lambda: asyncio.run(run_pipeline(drama.id, task.id)),
+        daemon=True,
+    ).start()
 
     out = DramaDetailOut.model_validate(drama)
     out.latest_task_id = task.id
