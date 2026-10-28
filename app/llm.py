@@ -19,12 +19,9 @@ SYSTEM_PROMPT = (
 )
 
 
-async def chat(prompt: str, mock_context: dict | None = None) -> str:
-    """调用 LLM 生成文本。未配置 Key 时返回演示文案。"""
+async def _call_llm(prompt: str) -> str:
+    """真正发起请求，失败时抛出可读异常（不降级）。"""
     rt = get_runtime_settings()
-    if not rt.configured:
-        return _mock_reply(mock_context or {})
-
     payload = {
         "model": rt.model,
         "messages": [
@@ -39,22 +36,58 @@ async def chat(prompt: str, mock_context: dict | None = None) -> str:
     async with httpx.AsyncClient(timeout=config.LLM_TIMEOUT) as client:
         resp = await client.post(url, json=payload, headers=headers)
         if resp.status_code >= 400:
-            # 把上游错误码与消息带出来，前端能直接定位是 Key 错还是额度问题
-            raise RuntimeError(f"LLM 接口返回 {resp.status_code}：{resp.text[:200]}")
+            raise RuntimeError(_friendly_error(resp.status_code, resp.text))
         data = resp.json()
-        try:
-            return data["choices"][0]["message"]["content"].strip()
-        except (KeyError, IndexError) as exc:
-            raise RuntimeError(f"LLM 返回格式异常：{str(data)[:200]}") from exc
+    try:
+        return data["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError) as exc:
+        raise RuntimeError(f"模型返回格式异常：{str(data)[:150]}") from exc
+
+
+async def chat(prompt: str, mock_context: dict | None = None) -> str:
+    """调用 LLM 生成文本。未配置 Key 时返回演示文案。
+
+    配置了 Key 但调用失败（余额不足 / 网络异常 / 模型名错误）时：
+    若开启 LLM_FALLBACK_DEMO（默认开启），降级为演示文案并在开头标注原因，
+    保证线上 Demo 不会因凭据问题中断整条流水线。
+    """
+    rt = get_runtime_settings()
+    if not rt.configured:
+        return _mock_reply(mock_context or {})
+
+    try:
+        return await _call_llm(prompt)
+    except Exception as exc:  # noqa: BLE001
+        if config.LLM_FALLBACK_DEMO:
+            logger.warning("LLM 调用失败，降级为演示文案：%s", exc)
+            return (
+                f"⚠️ 模型调用失败（{exc}），本条为演示文案。\n\n"
+                + _mock_reply(mock_context or {})
+            )
+        raise
+
+
+def _friendly_error(status_code: int, text: str) -> str:
+    """把上游错误翻译成人能看懂、能直接照做的提示。"""
+    low = text.lower()
+    if "insufficient balance" in low or "quota" in low or "balanc" in low:
+        return "模型账户余额不足，请充值或更换 API Key"
+    if status_code in (401, 403):
+        return "API Key 无效或无权限，请在「模型设置」中检查"
+    if status_code == 404:
+        return "接口地址或模型名不存在，请检查 Base URL 与模型名"
+    if status_code == 429:
+        return "请求过于频繁或超出限额，请稍后重试"
+    return f"模型接口返回 {status_code}：{text[:150]}"
 
 
 async def verify_connection() -> dict:
-    """连通性自检：用最小请求验证 Key / BaseURL / 模型名是否可用。"""
+    """连通性自检：绕过降级逻辑直接探测，确保错误如实暴露。"""
     rt = get_runtime_settings()
     if not rt.configured:
         return {"ok": True, "mode": "demo", "message": "未配置 API Key，当前为演示模式"}
     try:
-        reply = await chat("只回复两个字符：OK")
+        reply = await _call_llm("只回复两个字符：OK")
         return {"ok": True, "mode": "live", "model": rt.model, "reply": reply[:50]}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "mode": "live", "model": rt.model, "message": str(exc)[:300]}

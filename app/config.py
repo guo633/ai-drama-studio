@@ -16,6 +16,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///" + os.path.join(BASE_DIR, "
 # ---- LLM ----
 # 凭据统一走 app.settings（支持运行时热更新），这里仅保留超时等静态参数
 LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "120"))  # 秒，剧本生成长文本需要较长超时
+# 真实模型调用失败时是否降级为演示文案（保证线上 Demo 不中断）
+LLM_FALLBACK_DEMO = os.getenv("LLM_FALLBACK_DEMO", "true").lower() in ("1", "true", "yes")
 
 # ---- 部署 ----
 PORT = int(os.getenv("PORT", "8000"))  # Render/Railway 等平台会注入 PORT
