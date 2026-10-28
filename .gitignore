@@ -3,3 +3,6 @@ __pycache__/
 .env
 *.db
 .venv/
+
+# 本地网络受限时使用的推送脚本（含凭据参数，不入库）
+scripts/push_api.py

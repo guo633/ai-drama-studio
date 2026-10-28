@@ -1,10 +1,16 @@
 # 🎬 AI Drama Studio — 短剧创作工作台
 
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/guo633/ai-drama-studio)
+
 一句话创意 → 世界观 → 人物卡 → 分集大纲 → 第 1 集剧本 → 分镜与 AI 视频提示词，
 五步 Prompt 流水线自动生成一部竖屏短剧的完整创作方案。
 
 > 技术栈：FastAPI + SQLAlchemy + SQLite + JWT + 原生 HTML/JS（无前端构建依赖）
 > LLM：任意 OpenAI 兼容接口（DeepSeek / 通义 / Kimi 等），未配置 Key 时自动进入演示模式
+> 在线体验：启动后访问 `http://127.0.0.1:8000`，注册即用（首个注册账号为管理员）
 
 ## ✨ 核心特性
 
