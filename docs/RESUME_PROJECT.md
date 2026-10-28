@@ -49,8 +49,10 @@ llm.chat 在未配置 API Key 时返回确定性演示文案，流水线照常�
 
 ## 投递前 Checklist
 
-- [ ] 部署到 Render / Railway（免费档），README 顶部放在线 Demo 链接
-- [ ] GitHub 仓库改名合适的英文名（如 ai-drama-studio），补仓库简介和 Topics（fastapi、llm、prompt-engineering）
-- [ ] 把仓库内 git 邮箱改为真实邮箱：`git config user.email "你的邮箱"`
+- [x] 推送到 GitHub：https://github.com/guo633/ai-drama-studio （已设置 Topics：fastapi / llm / prompt-engineering）
+- [x] 补充 MIT LICENSE、README 徽章、Render 一键部署按钮
+- [ ] 部署到 Render（免费档）：README 顶部点 Deploy to Render，或手动新建 Web Service
+- [ ] 部署后在 README 顶部补「在线 Demo」链接
 - [ ] 录一段 30 秒演示 GIF 放进 README（新建→生成→导出全流程）
 - [ ] 按 docs/AI_DEV_CASE.md 核对每个细节，确保面试时每个字都答得上来
+- [ ] 注意：DeepSeek 账户需充值，否则模型调用会降级为演示文案（功能可用，内容为示例）
