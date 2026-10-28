@@ -72,6 +72,10 @@ ai-drama-studio/
 | GET | /api/dramas/{id}/export | 导出完整创作方案 txt |
 | GET | /api/tasks/{id} | 任务进度与结果（前端轮询） |
 | GET/PUT | /api/prompts[/{step}] | Prompt 模板查看 / 编辑 |
+| GET | /api/settings | 当前模型模式与打码后的 Key |
+| POST | /api/settings/llm | 运行时切换模型（仅管理员） |
+| POST | /api/settings/verify | 模型连通性自检（仅管理员） |
+| GET | /healthz | 健康检查 |
 
 ## 🧠 「Prompt 即 Skill」的设计
 
@@ -80,8 +84,31 @@ ai-drama-studio/
 用户在前端改模板 → 保存 → 下一次生成即用新模板，无需重启服务。
 详见 `docs/PROMPT_DESIGN.md`。
 
-## ☁️ 上线建议
+## ☁️ 上线部署
 
-- 免费部署：Render / Railway / fly.io（SQLite 单文件足够 MVP）
-- 上线前：修改 `SECRET_KEY`，配置真实 `LLM_API_KEY`
-- 简历投递时附：GitHub 仓库 + 在线 Demo 链接 + `docs/AI_DEV_CASE.md`
+仓库已内置部署配置，三条路径任选：
+
+**Render（推荐，免费档，支持 Python）**
+1. 新建 Web Service，连接本仓库
+2. Build Command：`pip install -r requirements.txt`
+3. Start Command：`uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+4. 环境变量填 `SECRET_KEY`（随机 32 位字符串）、`LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`、`APP_ENV=production`
+5. 部署完成后访问 `/healthz` 应返回 `{"status":"ok"}`
+
+也可直接使用仓库根目录的 `render.yaml` 蓝图一键部署（Render → New → Blueprint）。
+
+**Docker / Railway / fly.io**：仓库内的 `Dockerfile` 已就绪，`Procfile` 适配 Heroku 类平台。
+
+> ⚠️ 免费档的磁盘是临时的，实例重启后 SQLite 数据会清空，Prompt 模板会自动重新播种。
+> 需要持久化时，挂载持久磁盘并把 `DATABASE_URL` 指向该路径，或换用 PostgreSQL。
+
+## 💡 运行时模型配置（无需改代码）
+
+部署后不用重新构建就能换模型：
+
+- 环境变量方式：在平台控制台配置 `LLM_API_KEY` 等，重启生效
+- 页面方式：登录**首个注册的账号（即管理员）**→「模型设置」→ 填 Key → 保存并启用 → 点「连通性自检」确认可用
+
+密钥只存在服务器进程内存，接口只返回打码值，不落库、不写日志。
+
+## 🧠 「Prompt 即 Skill」的设计
